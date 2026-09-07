@@ -74,7 +74,7 @@ const SystemStatus = () => {
         <div className="flex items-center space-x-4 pr-4 mr-2">
             <StatusDot label="Blockchain" active={status.blockchain} />
             <StatusDot label="IPFS" active={status.ipfs} />
-            <StatusDot label="AI" active={status.ai} />
+            <StatusDot label="Risk Engine" active={status.ai} />
         </div>
     );
 };

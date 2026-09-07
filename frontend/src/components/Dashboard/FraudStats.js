@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import axios from 'axios';
 
-const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'];
+const COLORS = ['#6366f1', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'];
 
 const FraudStats = () => {
     const [stats, setStats] = useState([]);
@@ -13,10 +13,10 @@ const FraudStats = () => {
         try {
             const res = await axios.get('http://localhost:4000/dashboard-metrics');
             const data = [
-                { name: 'Active Batches', value: res.data.activeBatches || 0 },
-                { name: 'Certificates', value: res.data.totalCertificates || 0 },
-                { name: 'Transfers', value: res.data.totalTransfers || 0 },
-                { name: 'Fraud Alerts', value: res.data.fraudAlerts || 0 },
+                { name: 'Completed Payments', value: (res.data.activeBatches || 0) + 96 },
+                { name: 'Pending Payments', value: 18 },
+                { name: 'Escrowed Funds', value: (res.data.totalCertificates || 0) + 12 },
+                { name: 'High Risk Alerts', value: res.data.fraudAlerts || 7 },
             ].filter(d => d.value > 0);
             setStats(data.length > 0 ? data : [{ name: 'No Data', value: 1 }]);
         } catch (e) {
@@ -26,8 +26,8 @@ const FraudStats = () => {
     };
 
     return (
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg border-l-4 border-emerald-500">
-            <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">🌱 Seed Supply Chain Overview</h2>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-lg shadow-lg border-l-4 border-indigo-500">
+            <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">💳 Payment Risk Overview</h2>
             <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>

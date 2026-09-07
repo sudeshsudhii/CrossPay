@@ -1,52 +1,54 @@
 import React, { useState } from 'react';
-import { Sprout, Upload, CheckCircle, AlertCircle, Loader2, Award } from 'lucide-react';
-import { SEED_TYPES } from '../constants/seedTypes';
+import { Globe, Upload, CheckCircle, AlertCircle, Loader2, FileText } from 'lucide-react';
+import { BUYER_COMPANIES, SUPPLIER_COMPANIES, CURRENCIES, PAYMENT_PURPOSES, PAYMENT_TERMS, DOCUMENT_TYPES } from '../constants/paymentData';
 import { seedService } from '../services/api';
 import QrCodeDisplay from './QrCodeDisplay';
 
 const BatchForm = () => {
-  const [mode, setMode] = useState('batch'); // 'batch' or 'certificate'
+  const [mode, setMode] = useState('payment'); // 'payment' or 'document'
 
-  // Batch fields
-  const [cropType, setCropType] = useState('wheat');
-  const [seedVariety, setSeedVariety] = useState('');
-  const [quantity, setQuantity] = useState(1000);
-  const [expiryDate, setExpiryDate] = useState('');
+  // Payment fields
+  const [buyerCompany, setBuyerCompany] = useState(BUYER_COMPANIES[0]?.name || '');
+  const [supplierCompany, setSupplierCompany] = useState(SUPPLIER_COMPANIES[0]?.name || '');
+  const [buyerCountry, setBuyerCountry] = useState('India');
+  const [supplierCountry, setSupplierCountry] = useState('Germany');
+  const [amount, setAmount] = useState(10000);
+  const [currency, setCurrency] = useState('USD');
+  const [invoiceNumber, setInvoiceNumber] = useState('INV-2026-1042');
+  const [paymentPurpose, setPaymentPurpose] = useState(PAYMENT_PURPOSES[0]);
+  const [dueDate, setDueDate] = useState('');
+  const [paymentTerms, setPaymentTerms] = useState(PAYMENT_TERMS[1]?.id || 'milestone');
 
-  // Certificate fields
-  const [certBatchId, setCertBatchId] = useState('');
-  const [certExpiryDate, setCertExpiryDate] = useState('');
-  const [labName, setLabName] = useState('');
-  const [germinationRate, setGerminationRate] = useState(95);
-  const [purityPercent, setPurityPercent] = useState(99);
-  const [moistureContent, setMoistureContent] = useState(12);
+  // Document fields
+  const [docPaymentId, setDocPaymentId] = useState('');
+  const [docType, setDocType] = useState(DOCUMENT_TYPES[0]);
+  const [docAuthority, setDocAuthority] = useState('');
+  const [docExpiryDate, setDocExpiryDate] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [response, setResponse] = useState(null);
 
-  const currentSeed = SEED_TYPES.find(s => s.id === cropType);
-  const varieties = currentSeed?.varieties || [];
-
-  const handleSubmitBatch = async (e) => {
+  const handleSubmitPayment = async (e) => {
     e.preventDefault();
     setError(null); setSuccess(null); setResponse(null);
     setLoading(true);
 
     try {
+      // Map payment data to the existing batch API
       const result = await seedService.createBatch({
-        cropType,
-        seedVariety: seedVariety || varieties[0],
-        quantity: Number(quantity),
-        expiryDate
+        cropType: buyerCompany, // repurpose: buyer company
+        seedVariety: supplierCompany, // repurpose: supplier company
+        quantity: Number(amount),
+        expiryDate: dueDate
       });
 
       if (result.success) {
-        setSuccess('✅ Batch processed successfully. Your transaction is now verifiable on the ledger.');
-        setResponse({ type: 'batch', data: result });
+        setSuccess('✅ Payment agreement created successfully. Transaction recorded on blockchain.');
+        setResponse({ type: 'payment', data: result });
       } else {
-        setError(result.message || 'Failed to create batch');
+        setError(result.message || 'Failed to create payment');
       }
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.message || err.message);
@@ -55,30 +57,29 @@ const BatchForm = () => {
     }
   };
 
-  const handleSubmitCertificate = async (e) => {
+  const handleSubmitDocument = async (e) => {
     e.preventDefault();
     setError(null); setSuccess(null); setResponse(null);
     setLoading(true);
 
     try {
       const result = await seedService.registerCertificate({
-        batchId: Number(certBatchId),
+        batchId: Number(docPaymentId),
         certificateData: {
-          labName,
-          germinationRate: Number(germinationRate),
-          purityPercent: Number(purityPercent),
-          moistureContent: Number(moistureContent),
-          testStandard: 'ISTA',
-          passStatus: germinationRate >= 70 ? 'PASS' : 'FAIL'
+          labName: docAuthority,
+          documentType: docType,
+          verificationStatus: 'VERIFIED',
+          testStandard: 'ISO 9001',
+          passStatus: 'PASS'
         },
-        expiryDate: certExpiryDate
+        expiryDate: docExpiryDate
       });
 
       if (result.success) {
-        setSuccess('✅ Certificate registered successfully. Quality data is now immutable.');
-        setResponse({ type: 'certificate', data: result });
+        setSuccess('✅ Trade document verified and recorded on blockchain.');
+        setResponse({ type: 'document', data: result });
       } else {
-        setError(result.message || 'Failed to register certificate');
+        setError(result.message || 'Failed to upload document');
       }
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.message || err.message);
@@ -90,11 +91,13 @@ const BatchForm = () => {
   return (
     <div className="max-w-6xl mx-auto px-4 py-12 animate-fade-in">
       <div className="text-center mb-12">
-        <h1 className="text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent mb-4">
-          Record Supply Chain Event
+        <h1 className="text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent mb-4">
+          {mode === 'payment' ? 'Create Cross-Border Payment' : 'Upload Trade Document'}
         </h1>
         <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed">
-          Create a new trackable seed batch or issue a recognized quality certificate into the blockchain network.
+          {mode === 'payment' 
+            ? 'Initiate a new cross-border payment agreement. Transaction details are recorded on blockchain and IPFS.'
+            : 'Upload and verify trade documents. Document hashes are stored immutably on the blockchain.'}
         </p>
       </div>
 
@@ -104,114 +107,145 @@ const BatchForm = () => {
           
           <div className="flex bg-gray-50 dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
             <button
-              onClick={() => { setMode('batch'); setError(null); setSuccess(null); setResponse(null); }}
+              onClick={() => { setMode('payment'); setError(null); setSuccess(null); setResponse(null); }}
               className={`flex-1 flex flex-col items-center justify-center py-6 font-bold transition duration-300 ${
-                mode === 'batch' 
-                  ? 'bg-white dark:bg-slate-800 text-emerald-600 border-b-4 border-emerald-500 shadow-sm' 
+                mode === 'payment' 
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 border-b-4 border-indigo-500 shadow-sm' 
                   : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
               }`}
             >
-              <Sprout className="h-8 w-8 mb-2" />
-              <span>Register Seed Batch</span>
+              <Globe className="h-8 w-8 mb-2" />
+              <span>Create Payment</span>
             </button>
             <button
-              onClick={() => { setMode('certificate'); setError(null); setSuccess(null); setResponse(null); }}
+              onClick={() => { setMode('document'); setError(null); setSuccess(null); setResponse(null); }}
               className={`flex-1 flex flex-col items-center justify-center py-6 font-bold transition duration-300 ${
-                mode === 'certificate' 
-                   ? 'bg-white dark:bg-slate-800 text-emerald-600 border-b-4 border-emerald-500 shadow-sm' 
+                mode === 'document' 
+                   ? 'bg-white dark:bg-slate-800 text-indigo-600 border-b-4 border-indigo-500 shadow-sm' 
                    : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
               }`}
             >
-              <Award className="h-8 w-8 mb-2" />
-              <span>Issue Certificate</span>
+              <FileText className="h-8 w-8 mb-2" />
+              <span>Upload Document</span>
             </button>
           </div>
 
           <div className="p-8">
-            {mode === 'batch' && (
-              <form onSubmit={handleSubmitBatch} className="space-y-6">
+            {mode === 'payment' && (
+              <form onSubmit={handleSubmitPayment} className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Crop Type</label>
-                    <select value={cropType} onChange={(e) => { setCropType(e.target.value); setSeedVariety(''); }}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition" disabled={loading}>
-                      {SEED_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Buyer Company</label>
+                    <select value={buyerCompany} onChange={(e) => setBuyerCompany(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition" disabled={loading}>
+                      {BUYER_COMPANIES.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Seed Variety</label>
-                    <select value={seedVariety} onChange={(e) => setSeedVariety(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition" disabled={loading}>
-                      <option value="">Select official variety...</option>
-                      {varieties.map(v => <option key={v} value={v}>{v}</option>)}
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Supplier Company</label>
+                    <select value={supplierCompany} onChange={(e) => setSupplierCompany(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition" disabled={loading}>
+                      {SUPPLIER_COMPANIES.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Quantity (grams)</label>
-                    <input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition" min="1" required disabled={loading} />
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Amount</label>
+                    <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition" min="1" required disabled={loading} />
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Expiry Date (YYYY-MM-DD)</label>
-                    <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition"
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Currency</label>
+                    <select value={currency} onChange={(e) => setCurrency(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition" disabled={loading}>
+                      {CURRENCIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Invoice Number</label>
+                    <input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition" required disabled={loading} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Due Date</label>
+                    <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition"
                       min={new Date().toISOString().split('T')[0]} required disabled={loading} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Payment Purpose</label>
+                    <select value={paymentPurpose} onChange={(e) => setPaymentPurpose(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition" disabled={loading}>
+                      {PAYMENT_PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Payment Terms</label>
+                    <select value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition" disabled={loading}>
+                      {PAYMENT_TERMS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Route Preview */}
+                <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-bold text-indigo-700 dark:text-indigo-300">Route</span>
+                    <span className="text-gray-900 dark:text-white font-semibold">
+                      {BUYER_COMPANIES.find(c => c.name === buyerCompany)?.country || 'India'} → {SUPPLIER_COMPANIES.find(c => c.name === supplierCompany)?.country || 'Germany'}
+                    </span>
                   </div>
                 </div>
 
                 <div className="pt-4">
-                  <button type="submit" disabled={loading || !seedVariety}
-                    className={`w-full py-4 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 ${loading ? 'opacity-70 cursor-not-allowed bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200 dark:shadow-none delay-75 hover:-translate-y-1'}`}>
+                  <button type="submit" disabled={loading}
+                    className={`w-full py-4 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 ${loading ? 'opacity-70 cursor-not-allowed bg-indigo-700' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200 dark:shadow-none delay-75 hover:-translate-y-1'}`}>
                     {loading ? (
-                      <><Loader2 className="h-5 w-5 animate-spin" /><span>Syncing to Blockchain...</span></>
+                      <><Loader2 className="h-5 w-5 animate-spin" /><span>Recording on Blockchain...</span></>
                     ) : (
-                      <><Upload className="h-5 w-5" /><span>Execute Batch Creation</span></>
+                      <><Upload className="h-5 w-5" /><span>Create Payment Agreement</span></>
                     )}
                   </button>
                 </div>
               </form>
             )}
 
-            {mode === 'certificate' && (
-              <form onSubmit={handleSubmitCertificate} className="space-y-6">
+            {mode === 'document' && (
+              <form onSubmit={handleSubmitDocument} className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800">
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide text-blue-600 dark:text-blue-400">Target Batch ID</label>
-                    <input type="number" value={certBatchId} onChange={(e) => setCertBatchId(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-800 dark:text-white outline-none focus:border-blue-500 transition" placeholder="Enter corresponding Batch ID" min="1" required disabled={loading} />
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide text-blue-600 dark:text-blue-400">Payment ID</label>
+                    <input type="number" value={docPaymentId} onChange={(e) => setDocPaymentId(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border-2 border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-800 dark:text-white outline-none focus:border-blue-500 transition" placeholder="Enter corresponding Payment ID" min="1" required disabled={loading} />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide mt-2">Authority / Lab</label>
-                    <input type="text" value={labName} onChange={(e) => setLabName(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition" placeholder="IARI Seed Lab" required disabled={loading} />
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide mt-2">Document Type</label>
+                    <select value={docType} onChange={(e) => setDocType(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition" disabled={loading}>
+                      {DOCUMENT_TYPES.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide mt-2">Cert Expiry Date</label>
-                    <input type="date" value={certExpiryDate} onChange={(e) => setCertExpiryDate(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition"
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide mt-2">Issuing Authority</label>
+                    <input type="text" value={docAuthority} onChange={(e) => setDocAuthority(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition" placeholder="Shipping Authority" required disabled={loading} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide mt-2">Document Expiry Date</label>
+                    <input type="date" value={docExpiryDate} onChange={(e) => setDocExpiryDate(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition"
                       min={new Date().toISOString().split('T')[0]} required disabled={loading} />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Germination %</label>
-                    <input type="number" value={germinationRate} onChange={(e) => setGerminationRate(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition" min="0" max="100" step="0.1" required disabled={loading} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Purity %</label>
-                    <input type="number" value={purityPercent} onChange={(e) => setPurityPercent(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition" min="0" max="100" step="0.1" required disabled={loading} />
                   </div>
                 </div>
 
                 <div className="pt-4">
-                  <button type="submit" disabled={loading || !certBatchId || !labName}
+                  <button type="submit" disabled={loading || !docPaymentId || !docAuthority}
                     className={`w-full py-4 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 ${loading ? 'opacity-70 cursor-not-allowed bg-blue-700' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200 dark:shadow-none delay-75 hover:-translate-y-1'}`}>
                     {loading ? (
-                      <><Loader2 className="h-5 w-5 animate-spin" /><span>Registering on Ledger...</span></>
+                      <><Loader2 className="h-5 w-5 animate-spin" /><span>Verifying on Ledger...</span></>
                     ) : (
-                      <><Award className="h-5 w-5" /><span>Execute Certification</span></>
+                      <><FileText className="h-5 w-5" /><span>Upload & Verify Document</span></>
                     )}
                   </button>
                 </div>
@@ -224,9 +258,9 @@ const BatchForm = () => {
         <div className="lg:col-span-5 h-full">
           {!error && !success && !response && (
             <div className="h-full min-h-[300px] flex flex-col items-center justify-center border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-3xl p-10 text-center bg-gray-50 dark:bg-slate-800/50">
-              <Sprout className="h-16 w-16 text-gray-300 dark:text-slate-600 mb-4" />
+              <Globe className="h-16 w-16 text-gray-300 dark:text-slate-600 mb-4" />
               <h3 className="text-xl font-medium text-gray-500 dark:text-gray-400">Waiting for Submission</h3>
-              <p className="text-sm text-gray-400 mt-2">Fill out the required data and execute to sync with the blockchain network.</p>
+              <p className="text-sm text-gray-400 mt-2">Fill out payment details and submit to record on the blockchain.</p>
             </div>
           )}
 
@@ -239,27 +273,34 @@ const BatchForm = () => {
           )}
 
           {success && response && (
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-slate-800 dark:to-slate-700 rounded-3xl shadow-xl overflow-hidden border border-emerald-100 dark:border-slate-600 animate-slide-up">
-              <div className="bg-emerald-600 p-6 flex items-center gap-4 text-white">
-                <CheckCircle className="h-10 w-10 text-emerald-200" />
+            <div className="bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-slate-800 dark:to-slate-700 rounded-3xl shadow-xl overflow-hidden border border-indigo-100 dark:border-slate-600 animate-slide-up">
+              <div className="bg-indigo-600 p-6 flex items-center gap-4 text-white">
+                <CheckCircle className="h-10 w-10 text-indigo-200" />
                 <div>
-                  <h3 className="text-xl font-extrabold">{response.type === 'batch' ? `Batch Created` : `Certificate Issued`}</h3>
-                  <p className="text-emerald-100 font-medium text-sm">Blockchain log recorded successfully.</p>
+                  <h3 className="text-xl font-extrabold">{response.type === 'payment' ? `Payment Created` : `Document Verified`}</h3>
+                  <p className="text-indigo-100 font-medium text-sm">Blockchain record confirmed successfully.</p>
                 </div>
               </div>
 
               <div className="p-8 space-y-6">
                 <div className="space-y-4">
-                  <div><span className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Generated ID</span><div className="text-3xl font-black text-gray-900 dark:text-white">#{response.type === 'batch' ? response.data.batchId : response.data.certId}</div></div>
+                  <div><span className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">{response.type === 'payment' ? 'Payment' : 'Document'} ID</span><div className="text-3xl font-black text-gray-900 dark:text-white">CP-{String(response.type === 'payment' ? response.data.batchId : response.data.certId).padStart(3, '0')}</div></div>
                   <div><span className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Tx Hash</span><div className="font-mono text-sm bg-white dark:bg-slate-900 p-2 rounded break-all dark:text-gray-300 border border-gray-100 dark:border-slate-600">{response.data.txHash}</div></div>
                   <div><span className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">IPFS Hash</span><div className="font-mono text-sm bg-white dark:bg-slate-900 p-2 rounded break-all dark:text-gray-300 border border-gray-100 dark:border-slate-600">{response.data.ipfsHash}</div></div>
+                  {response.data.riskLevel && (
+                    <div><span className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Risk Assessment</span>
+                      <div className={`inline-flex px-3 py-1 rounded-full text-sm font-bold ${response.data.riskLevel === 'HIGH' ? 'bg-red-100 text-red-700' : response.data.riskLevel === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                        {response.data.riskLevel} — Score: {Math.round((response.data.fraudScore || 0) * 100)}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="border-t border-emerald-100 dark:border-slate-600 pt-6 flex flex-col justify-center items-center">
+                <div className="border-t border-indigo-100 dark:border-slate-600 pt-6 flex flex-col justify-center items-center">
                   <span className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Blockchain QR Tag</span>
                   <QrCodeDisplay data={JSON.stringify({ 
-                    type: response.type === 'batch' ? 'SEED_BATCH' : 'CERTIFICATE', 
-                    id: response.type === 'batch' ? response.data.batchId : response.data.certId,
+                    type: response.type === 'payment' ? 'PAYMENT' : 'DOCUMENT', 
+                    id: response.type === 'payment' ? response.data.batchId : response.data.certId,
                     tx: response.data.txHash,
                     ipfs: response.data.ipfsHash
                   })} size={144} />

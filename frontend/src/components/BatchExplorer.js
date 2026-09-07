@@ -1,22 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, Search, RefreshCw, ArrowRightLeft, Scissors, Award, AlertTriangle, Clock, CheckCircle, XCircle, ShieldCheck } from 'lucide-react';
+import { CreditCard, Search, RefreshCw, DollarSign, ArrowRightLeft, AlertTriangle, CheckCircle, ShieldCheck, Globe } from 'lucide-react';
 import { seedService } from '../services/api';
+import { mapBatchToPayment, DEMO_PAYMENTS } from '../constants/paymentData';
 
 const BatchExplorer = () => {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchId, setSearchId] = useState('');
 
-  // Transfer modal
+  // Transfer modal (repurposed as "Release Funds")
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferAddress, setTransferAddress] = useState('');
   const [transferBatchId, setTransferBatchId] = useState(null);
-
-  // Split modal
-  const [showSplit, setShowSplit] = useState(false);
-  const [splitQuantity, setSplitQuantity] = useState('');
-  const [splitBatchId, setSplitBatchId] = useState(null);
 
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
@@ -29,7 +25,7 @@ const BatchExplorer = () => {
       const data = await seedService.getAllBatches();
       setBatches(data);
     } catch (e) {
-      console.error('Failed to fetch batches:', e);
+      console.error('Failed to fetch payments:', e);
     } finally {
       setLoading(false);
     }
@@ -37,18 +33,14 @@ const BatchExplorer = () => {
 
   const handleSearch = async () => {
     if (!searchId.trim()) { fetchBatches(); return; }
-    try {
-      await seedService.getBatch(Number(searchId));
-      setBatches(batches.filter(b => String(b.batchId) === searchId));
-    } catch (e) {
-      setActionMessage({ type: 'error', text: `Batch #${searchId} not found` });
-    }
+    const num = searchId.replace('CP-', '').replace('cp-', '');
+    setBatches(batches.filter(b => String(b.batchId) === num));
   };
 
   const clearSearch = () => {
-      setSearchId('');
-      fetchBatches();
-  }
+    setSearchId('');
+    fetchBatches();
+  };
 
   const handleTransfer = async (e) => {
     e.preventDefault();
@@ -56,7 +48,7 @@ const BatchExplorer = () => {
     setActionMessage(null);
     try {
       const result = await seedService.transferBatch(transferBatchId, transferAddress);
-      setActionMessage({ type: 'success', text: `Transferred! Tx: ${result.txHash?.slice(0, 18)}...` });
+      setActionMessage({ type: 'success', text: `Funds released! Tx: ${result.txHash?.slice(0, 18)}...` });
       setShowTransfer(false);
       setTransferAddress('');
       fetchBatches();
@@ -67,47 +59,42 @@ const BatchExplorer = () => {
     }
   };
 
-  const handleSplit = async (e) => {
-    e.preventDefault();
-    setActionLoading(true);
-    setActionMessage(null);
-    try {
-      const result = await seedService.splitBatch(splitBatchId, Number(splitQuantity));
-      setActionMessage({ type: 'success', text: `Split! Child Batch #${result.childBatchId}. Tx: ${result.txHash?.slice(0, 18)}...` });
-      setShowSplit(false);
-      setSplitQuantity('');
-      fetchBatches();
-    } catch (e) {
-      setActionMessage({ type: 'error', text: e.response?.data?.error || e.message });
-    } finally {
-      setActionLoading(false);
-    }
+  const getStatusBadge = (status) => {
+    const styles = {
+      'Funded': 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300',
+      'Completed': 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300',
+      'Pending': 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300',
+      'In Progress': 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300',
+      'Refunded': 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300',
+      'Review': 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300',
+    };
+    return <span className={`px-3 py-1 text-xs font-bold rounded-full ${styles[status] || styles['Pending']} flex items-center shadow-sm space-x-1`}><span>{status}</span></span>;
   };
 
-  const getStatusBadge = (batch) => {
-    if (batch.isExpired || batch.statusLabel === 'EXPIRED') {
-      return <span className="px-3 py-1 text-xs font-bold rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 flex items-center shadow-sm space-x-1"><AlertTriangle className="h-4 w-4" /><span>EXPIRED</span></span>;
-    }
-    if (batch.statusLabel === 'TRANSFERRED') {
-      return <span className="px-3 py-1 text-xs font-bold rounded-full bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 flex items-center shadow-sm space-x-1"><ArrowRightLeft className="h-4 w-4" /><span>TRANSFERRED</span></span>;
-    }
-    if (batch.certIPFSHash && batch.certIPFSHash.length > 0) {
-      return <span className="px-3 py-1 text-xs font-bold rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center shadow-sm space-x-1"><Award className="h-4 w-4" /><span>VERIFIED</span></span>;
-    }
-    return <span className="px-3 py-1 text-xs font-bold rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 flex items-center shadow-sm space-x-1"><CheckCircle className="h-4 w-4" /><span>ACTIVE</span></span>;
+  const getRiskBadge = (risk) => {
+    const styles = {
+      'Low': 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300',
+      'Medium': 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300',
+      'High': 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300',
+    };
+    return <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${styles[risk] || styles['Low']}`}>{risk}</span>;
   };
 
-  const formatDate = (ts) => ts ? new Date(ts * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
-  const formatAddr = (a) => a ? `${a.slice(0, 6)}...${a.slice(-4)}` : 'N/A';
+  // Map real batches to payment display or use demo data
+  const payments = batches.length > 0 
+    ? batches.map((b, i) => mapBatchToPayment(b, i))
+    : DEMO_PAYMENTS.map((d, i) => ({ ...d, paymentId: d.id, batchId: i + 1 }));
 
-  const filteredBatches = searchId ? batches.filter(b => String(b.batchId) === searchId) : batches;
+  const filteredPayments = searchId 
+    ? payments.filter(p => p.paymentId.toLowerCase().includes(searchId.toLowerCase()) || String(p.batchId) === searchId.replace('CP-', ''))
+    : payments;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-12 animate-fade-in">
       <div className="mb-10 text-center">
-        <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent mb-4">Batch Explorer</h1>
+        <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent mb-4">Payment Explorer</h1>
         <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed">
-           Browse the global seed supply chain ledger. Verify batches, view lineage, and manage product ownership directly from the explorer.
+           Browse cross-border payment records. Verify transactions, track escrow, and manage payment lifecycle.
         </p>
       </div>
 
@@ -117,9 +104,9 @@ const BatchExplorer = () => {
           <Search className="absolute left-4 h-6 w-6 text-gray-400" />
           <input type="text" value={searchId} onChange={(e) => setSearchId(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="Search by Batch ID..." className="w-full pl-12 pr-4 py-3 bg-transparent text-gray-900 dark:text-white outline-none font-medium" />
+            placeholder="Search by Payment ID (e.g. CP-001)..." className="w-full pl-12 pr-4 py-3 bg-transparent text-gray-900 dark:text-white outline-none font-medium" />
         </div>
-        <button onClick={handleSearch} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold transition mr-2">Search</button>
+        <button onClick={handleSearch} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold transition mr-2">Search</button>
         <button onClick={clearSearch} className="p-3 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-xl transition">
           <RefreshCw className={`h-6 w-6 text-gray-600 dark:text-gray-300 ${loading ? 'animate-spin' : ''}`} />
         </button>
@@ -133,97 +120,78 @@ const BatchExplorer = () => {
         </div>
       )}
 
-      {/* Batch Grid */}
+      {/* Payment Table */}
       {loading ? (
-        <div className="text-center py-20"><RefreshCw className="h-12 w-12 text-emerald-500 animate-spin mx-auto mb-4" /><p className="text-gray-500 font-medium text-lg">Syncing from blockchain...</p></div>
-      ) : filteredBatches.length === 0 ? (
-        <div className="text-center py-20 bg-gray-50 dark:bg-slate-800/50 rounded-3xl border border-dashed border-gray-200 dark:border-slate-700"><Package className="h-16 w-16 text-gray-300 mx-auto mb-4" /><p className="text-gray-500 text-lg font-medium">No batches found matching criteria</p></div>
+        <div className="text-center py-20"><RefreshCw className="h-12 w-12 text-indigo-500 animate-spin mx-auto mb-4" /><p className="text-gray-500 font-medium text-lg">Loading payments...</p></div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredBatches.map(batch => (
-            <div key={batch.batchId} className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl border border-gray-100 dark:border-slate-700 hover:shadow-2xl transition-all hover:-translate-y-1 overflow-hidden relative">
-              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
-              
-              <div className="flex justify-between items-start mb-6 mt-2">
-                <div>
-                  <span className="text-sm text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider mb-1 block">Batch #{batch.batchId}</span>
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white capitalize">{batch.cropType}</h3>
-                  <p className="text-gray-500 dark:text-gray-400 font-medium">{batch.seedVariety}</p>
-                </div>
-                {getStatusBadge(batch)}
-              </div>
-
-              <div className="space-y-4 text-sm mb-8 bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl">
-                <div className="flex justify-between items-center"><span className="text-gray-500 dark:text-gray-400 uppercase font-bold text-xs">Quantity</span><span className="font-bold text-lg dark:text-white">{batch.quantity}g</span></div>
-                <div className="flex justify-between items-center"><span className="text-gray-500 dark:text-gray-400 uppercase font-bold text-xs">Expiry</span>
-                  <span className={`font-semibold ${batch.isExpired ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>
-                    {formatDate(batch.expiryDate)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center"><span className="text-gray-500 dark:text-gray-400 uppercase font-bold text-xs">Owner</span><span className="font-mono text-xs font-semibold dark:text-gray-300 bg-gray-200 dark:bg-slate-700 px-2 py-1 rounded">{formatAddr(batch.ownerAddress)}</span></div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col gap-2">
-                <Link to={`/verify?batchId=${batch.batchId}`} className="w-full py-3 bg-gray-900 hover:bg-black text-white dark:bg-emerald-600 dark:hover:bg-emerald-700 rounded-xl font-bold flex items-center justify-center gap-2 transition shadow-md">
-                   <ShieldCheck className="h-5 w-5" /> <span>Verify Authenticity</span>
-                </Link>
-                
-                {batch.statusLabel === 'ACTIVE' && !batch.isExpired && (
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    <button onClick={() => { setTransferBatchId(batch.batchId); setShowTransfer(true); setActionMessage(null); }}
-                      className="py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-slate-700 dark:text-blue-400 dark:hover:bg-slate-600 rounded-xl font-bold flex items-center justify-center gap-1.5 transition">
-                      <ArrowRightLeft className="h-4 w-4" /><span>Transfer</span>
-                    </button>
-                    <button onClick={() => { setSplitBatchId(batch.batchId); setSplitQuantity(''); setShowSplit(true); setActionMessage(null); }}
-                      className="py-2.5 bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-slate-700 dark:text-purple-400 dark:hover:bg-slate-600 rounded-xl font-bold flex items-center justify-center gap-1.5 transition">
-                      <Scissors className="h-4 w-4" /><span>Split</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Transfer Modal */}
-      {showTransfer && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-8 animate-fade-in border border-gray-100 dark:border-slate-700">
-            <h3 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white flex items-center"><ArrowRightLeft className="mr-3 text-blue-500"/> Transfer Batch #{transferBatchId}</h3>
-            <form onSubmit={handleTransfer} className="space-y-6">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">New Owner Address</label>
-                <input type="text" value={transferAddress} onChange={(e) => setTransferAddress(e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="0x..." required />
-              </div>
-              <div className="flex space-x-3 pt-2">
-                <button type="button" onClick={() => setShowTransfer(false)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-white font-bold rounded-xl transition">Cancel</button>
-                <button type="submit" disabled={actionLoading} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition">
-                  {actionLoading ? 'Transferring...' : 'Confirm Transfer'}
-                </button>
-              </div>
-            </form>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full table-auto">
+              <thead>
+                <tr className="bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-300">
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Payment ID</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Buyer</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Supplier</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Route</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Amount</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Risk</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                {filteredPayments.length === 0 ? (
+                  <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-400">
+                    <CreditCard className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                    <p className="text-lg font-medium">No payments found</p>
+                  </td></tr>
+                ) : filteredPayments.map((payment, idx) => (
+                  <tr key={payment.paymentId || idx} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition">
+                    <td className="px-6 py-4 font-bold text-indigo-600 dark:text-indigo-400">{payment.paymentId}</td>
+                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-medium">{payment.buyer}</td>
+                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-medium">{payment.supplier}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
+                      <span className="flex items-center space-x-1"><Globe className="h-3 w-3" /><span>{payment.route}</span></span>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-bold text-gray-900 dark:text-white">${payment.amount?.toLocaleString()}</td>
+                    <td className="px-6 py-4">{getStatusBadge(payment.status)}</td>
+                    <td className="px-6 py-4">{getRiskBadge(payment.risk)}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-2">
+                        <Link to={`/documents?batchId=${payment.batchId}`} className="px-3 py-1.5 bg-gray-900 hover:bg-black text-white dark:bg-indigo-600 dark:hover:bg-indigo-700 rounded-lg text-xs font-bold transition flex items-center gap-1">
+                          <ShieldCheck className="h-3 w-3" /> Verify
+                        </Link>
+                        {payment.status === 'Funded' && (
+                          <button onClick={() => { setTransferBatchId(payment.batchId); setShowTransfer(true); setActionMessage(null); }}
+                            className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-slate-700 dark:text-blue-400 dark:hover:bg-slate-600 rounded-lg text-xs font-bold transition flex items-center gap-1">
+                            <DollarSign className="h-3 w-3" /> Release
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* Split Modal */}
-      {showSplit && (
+      {/* Release Funds Modal */}
+      {showTransfer && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-8 animate-fade-in border border-gray-100 dark:border-slate-700">
-            <h3 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white flex items-center"><Scissors className="mr-3 text-purple-500"/> Split Batch #{splitBatchId}</h3>
-            <form onSubmit={handleSplit} className="space-y-6">
+            <h3 className="text-2xl font-bold mb-6 text-gray-800 dark:text-white flex items-center"><DollarSign className="mr-3 text-indigo-500"/> Release Funds — Payment #{transferBatchId}</h3>
+            <form onSubmit={handleTransfer} className="space-y-6">
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Split Quantity (grams)</label>
-                <input type="number" value={splitQuantity} onChange={(e) => setSplitQuantity(e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition" placeholder="e.g. 500" min="1" required />
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Supplier Wallet Address</label>
+                <input type="text" value={transferAddress} onChange={(e) => setTransferAddress(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition" placeholder="0x..." required />
               </div>
               <div className="flex space-x-3 pt-2">
-                <button type="button" onClick={() => setShowSplit(false)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-white font-bold rounded-xl transition">Cancel</button>
-                <button type="submit" disabled={actionLoading} className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg transition">
-                  {actionLoading ? 'Splitting...' : 'Confirm Split'}
+                <button type="button" onClick={() => setShowTransfer(false)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-white font-bold rounded-xl transition">Cancel</button>
+                <button type="submit" disabled={actionLoading} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition">
+                  {actionLoading ? 'Releasing...' : 'Confirm Release'}
                 </button>
               </div>
             </form>

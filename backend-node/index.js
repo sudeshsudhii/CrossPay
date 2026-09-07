@@ -708,13 +708,13 @@ app.use((err, req, res, next) => {
 
 initServices().then(() => {
     app.listen(PORT, () => {
-        console.log(`SeedChain Backend running on port ${PORT}`);
+        console.log(`CrossPay Backend running on port ${PORT}`);
         console.log(`Health check: http://localhost:${PORT}/health`);
     });
 }).catch(err => {
     console.error('Failed to initialize services:', err);
     // Start server anyway for partial functionality
     app.listen(PORT, () => {
-        console.log(`SeedChain Backend running on port ${PORT} (degraded mode)`);
+        console.log(`CrossPay Backend running on port ${PORT} (degraded mode)`);
     });
 });
